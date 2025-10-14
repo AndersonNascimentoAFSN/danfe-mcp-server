@@ -24,6 +24,7 @@ import fastifyCors from "@fastify/cors";
 import { z } from "zod";
 import { DanfeDownloaderFinal } from "./danfe-downloader-final.js";
 import { DanfeXmlReader } from "./danfe-xml-reader.js";
+import fs from "fs-extra";
 
 const PORT = parseInt(process.env.PORT || "3000");
 const HOST = process.env.HOST || "0.0.0.0";
@@ -65,7 +66,7 @@ mcpServer.tool(
       const reader = new DanfeXmlReader();
       const xmlData = await reader.readAndParse(filePath);
 
-      console.log(`✅ XML lido com sucesso\n`);
+      console.log(`✅ XML lido com sucesso`);
 
       const result = {
         success: true,
@@ -75,6 +76,15 @@ mcpServer.tool(
         timestamp: new Date().toISOString(),
         data: xmlData,
       };
+
+      // Excluir arquivo XML após processar
+      try {
+        await fs.unlink(filePath);
+        console.log(`🗑️  XML excluído: ${fileName}\n`);
+      } catch (unlinkError) {
+        console.warn(`⚠️  Não foi possível excluir o XML: ${unlinkError}\n`);
+        // Não falhar a operação se não conseguir excluir
+      }
 
       return {
         content: [
