@@ -211,7 +211,16 @@ app.post<{
     const reader = new DanfeXmlReader();
     const xmlData = await reader.readAndParse(filePath);
 
-    console.log(`✅ XML lido com sucesso\n`);
+    console.log(`✅ XML lido com sucesso`);
+
+    // Excluir arquivo XML após processar
+    try {
+      await fs.unlink(filePath);
+      console.log(`🗑️  XML excluído: ${fileName}\n`);
+    } catch (unlinkError) {
+      console.warn(`⚠️  Não foi possível excluir o XML: ${unlinkError}\n`);
+      // Não falhar a operação se não conseguir excluir
+    }
 
     return {
       content: [
