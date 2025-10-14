@@ -1,0 +1,67 @@
+# Render Blueprint - DANFE Downloader MCP Server
+# Infrastructure as Code para deploy automatizado no Render
+#
+# Este arquivo define a infraestrutura completa do projeto:
+# - Web Service com Docker (Node.js + Playwright + xvfb)
+# - Configurações de ambiente
+# - Health check
+# - Auto-deploy from Git
+
+services:
+  # ============================================
+  # Web Service - MCP Server com Playwright
+  # ============================================
+  - type: web
+    name: danfe-downloader-mcp
+    runtime: image
+    plan: free  # Altere para 'starter' ou superior se precisar de mais recursos
+    
+    # Região (escolha a mais próxima dos seus usuários)
+    # Opções: oregon (us-west), ohio (us-east), frankfurt (eu-central), singapore (ap-southeast)
+    region: ohio
+    
+    # Branch do Git para auto-deploy
+    branch: main
+    
+    # Dockerfile customizado para Render
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    
+    # Health check endpoint
+    healthCheckPath: /health
+    
+    # Configurações de recursos
+    numInstances: 1
+    
+    # Variáveis de ambiente
+    envVars:
+      # Porta do servidor (Render define automaticamente)
+      - key: PORT
+        value: 3000
+      
+      # Host (deve ser 0.0.0.0 para aceitar conexões externas)
+      - key: HOST
+        value: 0.0.0.0
+      
+      # Node.js em produção
+      - key: NODE_ENV
+        value: production
+      
+      # Display virtual xvfb (automaticamente configurado no Dockerfile)
+      - key: DISPLAY
+        value: :99
+      
+      # Playwright configurações
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /ms-playwright
+      
+      # Timeout para builds (importante para instalar Playwright)
+      - key: BUILD_TIMEOUT
+        value: 600
+    
+    # Auto-deploy configuração
+    autoDeploy: true
+    
+    # Domínio customizado (opcional)
+    # domains:
+    #   - danfe-downloader.yourdomain.com

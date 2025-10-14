@@ -1,0 +1,161 @@
+# ============================================
+# Dockerfile Otimizado para Render
+# DANFE Downloader MCP Server
+# ============================================
+# 
+# Configuração completa para:
+# - Node.js 20 LTS
+# - Playwright com Chromium
+# - xvfb (display virtual para modo headless)
+# - MCP Server com Fastify
+#
+# Plataforma: linux/amd64 (requisito Render)
+# ============================================
+
+FROM --platform=linux/amd64 node:20-bullseye
+
+# Metadados
+LABEL maintainer="Anderson Nascimento"
+LABEL description="MCP DANFE Downloader Server para Render"
+LABEL version="1.0.0"
+
+# ============================================
+# Instalar dependências do sistema
+# ============================================
+
+RUN apt-get update && apt-get install -y \
+    # xvfb - X Virtual Framebuffer (display virtual)
+    xvfb \
+    # Playwright/Chromium dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgtk-3-0 \
+    # Fontes
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    # Utilitários
+    ca-certificates \
+    wget \
+    libappindicator3-1 \
+    libnss3-dev \
+    libxss1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# Configurar usuário (Render roda como root, mas é boa prática)
+# ============================================
+
+# Criar diretório da aplicação
+WORKDIR /app
+
+# ============================================
+# Instalar dependências Node.js
+# ============================================
+
+# Copiar apenas package files primeiro (melhor cache)
+COPY package*.json ./
+
+# Instalar dependências de produção
+RUN npm ci --only=production
+
+# Instalar Playwright Chromium
+RUN npx playwright install chromium --with-deps
+
+# ============================================
+# Copiar código fonte e build
+# ============================================
+
+COPY . .
+
+# Compilar TypeScript
+RUN npm run build
+
+# Criar diretório de downloads
+RUN mkdir -p downloads
+
+# ============================================
+# Configurar variáveis de ambiente
+# ============================================
+
+# Display virtual do xvfb
+ENV DISPLAY=:99
+
+# Diretório dos browsers do Playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Node.js em modo produção
+ENV NODE_ENV=production
+
+# ============================================
+# Expor porta
+# ============================================
+
+# Render define PORT via variável de ambiente (geralmente 10000)
+# Mas configuramos para usar 3000 por padrão
+EXPOSE 3000
+
+# ============================================
+# Script de inicialização
+# ============================================
+
+# Criar script que inicia xvfb e depois o servidor
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "╔════════════════════════════════════════════════════════════╗"\n\
+echo "║     🚀 DANFE Downloader MCP Server - Render Deploy       ║"\n\
+echo "╚════════════════════════════════════════════════════════════╝"\n\
+echo ""\n\
+echo "🖥️  Iniciando xvfb (display virtual)..."\n\
+Xvfb :99 -screen 0 1920x1080x24 -ac -nolisten tcp -dpi 96 +extension RANDR > /dev/null 2>&1 &\n\
+XVFB_PID=$!\n\
+echo "✅ xvfb iniciado (PID: $XVFB_PID, Display: :99)"\n\
+echo ""\n\
+\n\
+# Aguardar xvfb estar pronto\n\
+sleep 2\n\
+\n\
+# Verificar se DISPLAY está disponível\n\
+if [ -n "$DISPLAY" ]; then\n\
+    echo "✅ Display configurado: $DISPLAY"\n\
+else\n\
+    echo "⚠️  DISPLAY não configurado, definindo para :99"\n\
+    export DISPLAY=:99\n\
+fi\n\
+\n\
+echo ""\n\
+echo "🌐 Iniciando servidor MCP na porta ${PORT:-3000}..."\n\
+echo ""\n\
+\n\
+# Iniciar servidor Node.js\n\
+exec node dist/index.js\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# ============================================
+# Health Check
+# ============================================
+
+# Render verifica se a porta está respondendo
+# Adicionamos health check interno também
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3000}/health || exit 1
+
+# ============================================
+# Comando de inicialização
+# ============================================
+
+CMD ["/app/start.sh"]

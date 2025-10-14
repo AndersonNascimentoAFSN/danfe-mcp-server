@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "danfe-downloader": {
+      "command": "xvfb-run",
+      "args": [
+        "-a",
+        "--server-args=-screen 0 1920x1080x24",
+        "node",
+        "__PROJECT_PATH__/dist/index.js"
+      ]
+    }
+  }
+}

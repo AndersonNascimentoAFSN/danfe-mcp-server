@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  danfe-downloader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: danfe-downloader
+    restart: unless-stopped
+    
+    # Volumes para persistir downloads e logs
+    volumes:
+      - ./downloads:/app/downloads
+      - ./logs:/var/log/danfe-downloader
+    
+    # Variáveis de ambiente
+    environment:
+      - NODE_ENV=production
+      - DISPLAY=:99
+      - TZ=America/Sao_Paulo  # Ajuste conforme seu timezone
+    
+    # Recursos (ajuste conforme necessário)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Configuração de logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    
+    # Rede (se precisar expor porta HTTP no futuro)
+    # ports:
+    #   - "3000:3000"
+    
+    # Política de reinício
+    # unless-stopped: reinicia sempre, exceto quando parado manualmente
+
+# Volumes nomeados (opcional, se preferir volumes Docker)
+# volumes:
+#   downloads:
+#   logs:
