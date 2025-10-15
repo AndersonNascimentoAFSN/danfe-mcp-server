@@ -34,7 +34,7 @@ import {
 } from "./shared/errors/domain-errors.js";
 import { getBrowserPool } from "./infrastructure/browser/browser-pool.js";
 import { PlaywrightAdapter } from "./infrastructure/browser/playwright-adapter.js";
-import { DanfeXmlReader } from "./danfe-xml-reader.js";
+import { DanfeXmlReader } from "./infrastructure/xml/danfe-xml-reader.js";
 import { errorHandler } from "./presentation/http/middleware/error-handler.js";
 import { rateLimitMiddleware } from "./presentation/http/middleware/rate-limit.js";
 
