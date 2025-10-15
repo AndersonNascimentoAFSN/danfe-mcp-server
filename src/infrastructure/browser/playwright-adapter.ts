@@ -54,47 +54,75 @@ export class PlaywrightAdapter {
       const searchButtonSelector = '#searchBtn';
       await this.page.click(searchButtonSelector);
 
-      // Wait for search response first
+      // Wait for search response and check for error messages
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for search response');
-      await this.page.waitForTimeout(3000);
+      
+      // Give more time for the error message to appear if the key is invalid
+      await this.page.waitForTimeout(5000);
 
-      // Check for error messages first
+      // Check for error messages that appear when access key is invalid
       const errorMessages = [
         'Chave de acesso não encontrada!',
         'Chave de acesso inválida',
         'NFe não encontrada',
-        'Documento não encontrado'
+        'Documento não encontrado',
+        'Chave não encontrada',
+        'Dados não encontrados'
       ];
 
+      logger.info({ chave: this.maskChave(chaveAcesso) }, 'Checking for error messages');
+      
       for (const errorMessage of errorMessages) {
-        const errorElement = await this.page.locator(`text=${errorMessage}`).first();
-        if (await errorElement.isVisible()) {
-          logger.error({ 
-            chave: this.maskChave(chaveAcesso), 
-            errorMessage 
-          }, 'Invalid access key detected');
-          throw new Error(`Invalid access key: ${errorMessage}`);
+        try {
+          const errorElement = await this.page.locator(`text=${errorMessage}`).first();
+          const isVisible = await errorElement.isVisible();
+          if (isVisible) {
+            logger.error({ 
+              chave: this.maskChave(chaveAcesso), 
+              errorMessage 
+            }, 'Invalid access key detected - error message found');
+            throw new Error(`Invalid access key: ${errorMessage}`);
+          }
+        } catch (locatorError) {
+          // Continue checking other error messages if this one fails
+          logger.debug({ errorMessage }, 'Error message not found, continuing check');
         }
       }
 
-      // Check for general error indicators
-      const hasErrorClass = await this.page.locator('.error, .alert-danger, .text-red-500').first().isVisible();
-      if (hasErrorClass) {
-        const errorText = await this.page.locator('.error, .alert-danger, .text-red-500').first().textContent();
-        logger.error({ 
-          chave: this.maskChave(chaveAcesso), 
-          errorText 
-        }, 'Error message detected on page');
-        throw new Error(`Page error: ${errorText}`);
+      // Check for general error indicators by CSS classes and common error containers
+      const errorSelectors = [
+        '.error',
+        '.alert-danger', 
+        '.text-red-500',
+        '.alert-error',
+        '.error-message',
+        '.invalid-key',
+        '[class*="error"]',
+        '[class*="danger"]'
+      ];
+
+      for (const selector of errorSelectors) {
+        try {
+          const errorElement = await this.page.locator(selector).first();
+          const isVisible = await errorElement.isVisible();
+          if (isVisible) {
+            const errorText = await errorElement.textContent();
+            if (errorText && errorText.trim().length > 0) {
+              logger.error({ 
+                chave: this.maskChave(chaveAcesso), 
+                errorText: errorText.trim(),
+                selector 
+              }, 'Error indicator detected on page');
+              throw new Error(`Page error: ${errorText.trim()}`);
+            }
+          }
+        } catch (selectorError) {
+          // Continue checking other selectors if this one fails
+          logger.debug({ selector }, 'Error selector not found, continuing check');
+        }
       }
 
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'No error messages found, proceeding with download');
-
-      // Prepare download listener
-      logger.info({ chave: this.maskChave(chaveAcesso) }, 'Preparing download listener');
-      const downloadPromise = this.page.waitForEvent('download', {
-        timeout: 120000,
-      });
 
       // Wait for results with improved logic
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for search results');
@@ -130,6 +158,12 @@ export class PlaywrightAdapter {
         throw new Error('Download button not visible - this usually indicates an invalid access key or the key was not found in the system');
       }
 
+      // Prepare download listener AFTER button is confirmed visible
+      logger.info({ chave: this.maskChave(chaveAcesso) }, 'Preparing download listener');
+      const downloadPromise = this.page.waitForEvent('download', {
+        timeout: 120000,
+      });
+
       // Click download XML button
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Clicking download XML button');
       await this.page.click('#downloadXmlBtn');
@@ -164,6 +198,9 @@ export class PlaywrightAdapter {
         'Download completed and validated'
       );
 
+      // Cleanup after successful completion
+      await this.cleanup();
+
       return finalPath;
     } catch (error: any) {
       const duration = Date.now() - startTime;
@@ -176,14 +213,14 @@ export class PlaywrightAdapter {
         'Download failed'
       );
 
+      // Cleanup immediately on error to prevent resource leaks
+      await this.cleanup();
+
       if (error.message && error.message.includes('timeout')) {
         throw new DownloadTimeoutError(chaveAcesso, duration);
       }
 
       throw new BrowserError(error.message || 'Unknown browser error');
-    } finally {
-      // Always cleanup resources
-      await this.cleanup();
     }
   }
 
