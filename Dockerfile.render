@@ -73,9 +73,12 @@ RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
 RUN mkdir -p /home/nodejs/.cache && \
     chown -R nodejs:nodejs /home/nodejs
 
-# Instalar Playwright como user nodejs (não como root)
+# Instalar dependências do sistema como root primeiro
+RUN npx playwright install-deps chromium
+
+# Agora instalar apenas os browsers como user nodejs
 USER nodejs
-RUN npx playwright install chromium --with-deps
+RUN npx playwright install chromium
 
 # Verificar se instalou corretamente
 RUN ls -la /home/nodejs/.cache/ms-playwright/ && \
