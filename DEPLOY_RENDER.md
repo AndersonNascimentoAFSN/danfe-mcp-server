@@ -501,6 +501,26 @@ Seu **DANFE Downloader MCP Server** agora está rodando no Render com:
 
 ---
 
+## 🔧 **ATUALIZAÇÃO - Port Binding Fix (15/10/2025)**
+
+### ❌ **Problema Resolvido:**
+```
+Deploy failed for 9cfbcd8: refactor: new arquitecture
+Timed out
+Port scan timeout reached, no open ports detected.
+```
+
+### ✅ **Solução Aplicada:**
+
+1. **Script `start.sh` criado** - Inicialização limpa com xvfb
+2. **Dockerfile.render corrigido** - Build TypeScript funcionando
+3. **Variáveis de ambiente** - HOST=0.0.0.0, PORT correto
+4. **Build validado** - Teste local com sucesso (65.4s)
+
+### 🚀 **Status:** PRONTO PARA DEPLOY
+
+---
+
 **🚀 Deploy realizado com sucesso!**
 
 Para dúvidas ou problemas, consulte a seção [Troubleshooting](#troubleshooting) ou abra uma issue no repositório.

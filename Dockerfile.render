@@ -69,8 +69,8 @@ WORKDIR /app
 # Copiar apenas package files primeiro (melhor cache)
 COPY package*.json ./
 
-# Instalar dependências de produção
-RUN npm ci --only=production
+# Instalar TODAS as dependências (incluindo devDependencies para build)
+RUN npm ci
 
 # Instalar Playwright Chromium
 RUN npx playwright install chromium --with-deps
@@ -81,8 +81,14 @@ RUN npx playwright install chromium --with-deps
 
 COPY . .
 
-# Compilar TypeScript
+# Dar permissão de execução ao script start
+RUN chmod +x start.sh
+
+# Compilar TypeScript  
 RUN npm run build
+
+# Remover devDependencies após build para reduzir tamanho da imagem
+RUN npm prune --production
 
 # Criar diretório de downloads
 RUN mkdir -p downloads
@@ -109,41 +115,8 @@ ENV NODE_ENV=production
 EXPOSE 3000
 
 # ============================================
-# Script de inicialização
+# Script de inicialização já copiado e com permissões
 # ============================================
-
-# Criar script que inicia xvfb e depois o servidor
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-echo "╔════════════════════════════════════════════════════════════╗"\n\
-echo "║     🚀 DANFE Downloader MCP Server - Render Deploy       ║"\n\
-echo "╚════════════════════════════════════════════════════════════╝"\n\
-echo ""\n\
-echo "🖥️  Iniciando xvfb (display virtual)..."\n\
-Xvfb :99 -screen 0 1920x1080x24 -ac -nolisten tcp -dpi 96 +extension RANDR > /dev/null 2>&1 &\n\
-XVFB_PID=$!\n\
-echo "✅ xvfb iniciado (PID: $XVFB_PID, Display: :99)"\n\
-echo ""\n\
-\n\
-# Aguardar xvfb estar pronto\n\
-sleep 2\n\
-\n\
-# Verificar se DISPLAY está disponível\n\
-if [ -n "$DISPLAY" ]; then\n\
-    echo "✅ Display configurado: $DISPLAY"\n\
-else\n\
-    echo "⚠️  DISPLAY não configurado, definindo para :99"\n\
-    export DISPLAY=:99\n\
-fi\n\
-\n\
-echo ""\n\
-echo "🌐 Iniciando servidor MCP na porta ${PORT:-3000}..."\n\
-echo ""\n\
-\n\
-# Iniciar servidor Node.js\n\
-exec node dist/index.js\n\
-' > /app/start.sh && chmod +x /app/start.sh
 
 # ============================================
 # Health Check
