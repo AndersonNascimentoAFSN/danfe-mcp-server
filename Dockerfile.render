@@ -65,10 +65,12 @@ RUN npm ci
 # Instalar Playwright Chromium (ANTES de criar usuário não-root)
 RUN npx playwright install chromium --with-deps
 
-# Verificar instalação do Chromium
-RUN ls -la /ms-playwright/ && \
-    find /ms-playwright -name "chrome" -type f && \
-    echo "✅ Chromium instalado com sucesso"
+# Debugar onde o Playwright instalou os browsers
+RUN echo "🔍 Procurando instalação do Playwright..." && \
+    find / -name "*chromium*" -type d 2>/dev/null | head -10 && \
+    find / -name "chrome" -type f 2>/dev/null | head -5 && \
+    ls -la ~/.cache/ms-playwright/ 2>/dev/null || echo "Não encontrado em ~/.cache/ms-playwright" && \
+    echo "✅ Playwright instalado - debugging concluído"
 
 # ============================================
 # Configuração de usuário (segurança)
@@ -97,7 +99,7 @@ RUN mkdir -p downloads
 
 # Ajustar permissões
 RUN chown -R nodejs:nodejs /app && \
-    chown -R nodejs:nodejs /ms-playwright
+    chown -R nodejs:nodejs ~/.cache/ms-playwright/ 2>/dev/null || echo "Playwright cache não encontrado para chown"
 
 # Mudar para usuário não-root
 USER nodejs
@@ -109,8 +111,8 @@ USER nodejs
 # Display virtual do xvfb
 ENV DISPLAY=:99
 
-# Diretório dos browsers do Playwright
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Diretório dos browsers do Playwright (usar caminho padrão)
+# ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright (removido - deixar Playwright usar padrão)
 
 # Node.js em modo produção
 ENV NODE_ENV=production
