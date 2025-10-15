@@ -345,15 +345,8 @@ async function main() {
 
   logger.info("");
 
-  // Initialize browser pool
-  logger.info("🎭 Inicializando browser pool...");
-  const browserPool = getBrowserPool();
-  await browserPool.initialize();
-  logger.info("✅ Browser pool inicializado");
-
-  logger.info("");
-
-  app.listen(Config.PORT, Config.HOST, () => {
+  // START HTTP SERVER FIRST (CRITICAL for Render port detection)
+  const server = app.listen(Config.PORT, Config.HOST, () => {
     logger.info(`✅ Servidor HTTP em http://${Config.HOST}:${Config.PORT}`);
     logger.info("");
     logger.info("📚 Endpoints:");
@@ -361,6 +354,21 @@ async function main() {
     logger.info(`   GET  http://${Config.HOST}:${Config.PORT}/mcp/tools`);
     logger.info(`   POST http://${Config.HOST}:${Config.PORT}/mcp`);
     logger.info("");
+    
+    // Initialize browser pool AFTER server is running
+    logger.info("🎭 Inicializando browser pool...");
+    getBrowserPool().initialize()
+      .then(() => {
+        logger.info("✅ Browser pool inicializado");
+      })
+      .catch((error) => {
+        logger.error("❌ Erro ao inicializar browser pool:", error);
+        logger.warn("⚠️  Continuando sem browser pool (health check ainda funciona)");
+      });
+  });
+
+  // Log configuration after server starts
+  server.on('listening', () => {
     logger.info("🔧 GitHub Copilot config:");
     logger.info('   "github.copilot.chat.mcp.servers": {');
     logger.info('     "danfe-xml": {');
@@ -383,11 +391,20 @@ async function main() {
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received. Starting graceful shutdown...`);
     
-    // Close browser pool
-    await browserPool.shutdown();
+    try {
+      // Close browser pool
+      const browserPool = getBrowserPool();
+      await browserPool.shutdown();
+      logger.info("✅ Browser pool closed");
+    } catch (error) {
+      logger.warn({ error }, "⚠️  Error closing browser pool");
+    }
     
     // Close server
-    process.exit(0);
+    server.close(() => {
+      logger.info("✅ HTTP server closed");
+      process.exit(0);
+    });
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));
