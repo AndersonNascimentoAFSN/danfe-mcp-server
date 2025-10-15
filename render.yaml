@@ -35,9 +35,9 @@ services:
     
     # Variáveis de ambiente
     envVars:
-      # Porta do servidor (Render define automaticamente)
-      - key: PORT
-        value: 3000
+      # Porta do servidor (Render define automaticamente, NÃO forçar valor fixo)
+      # - key: PORT
+      #   value: 3000
       
       # Host (deve ser 0.0.0.0 para aceitar conexões externas)
       - key: HOST
