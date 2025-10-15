@@ -56,24 +56,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# Configurar usuário (Render roda como root, mas é boa prática)
+# Configuração de usuário (segurança)
 # ============================================
 
-# Criar diretório da aplicação
-WORKDIR /app
-
-# ============================================
-# Instalar dependências Node.js
-# ============================================
-
-# Copiar apenas package files primeiro (melhor cache)
-COPY package*.json ./
-
-# Instalar TODAS as dependências (incluindo devDependencies para build)
-RUN npm ci
-
-# Instalar Playwright Chromium
-RUN npx playwright install chromium --with-deps
+# Usuário já criado acima, apenas ajustar permissões
+RUN chown -R nodejs:nodejs /app
+USER nodejs
 
 # ============================================
 # Copiar código fonte e build
@@ -102,6 +90,10 @@ ENV DISPLAY=:99
 
 # Diretório dos browsers do Playwright
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Configurações Playwright para Render
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/ms-playwright/chromium-*/chrome-linux/chrome
 
 # Node.js em modo produção
 ENV NODE_ENV=production
