@@ -60,17 +60,64 @@ export class PlaywrightAdapter {
         timeout: 120000,
       });
 
-      // Wait for results
+      // Wait for results with improved logic
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for search results');
-      await this.page.waitForSelector('#downloadXmlBtn', {
-        state: 'visible',
-        timeout: 60000,
-      });
+      
+      // First wait for element to exist (even if hidden)
+      await this.page.waitForSelector('#downloadXmlBtn', { timeout: 30000 });
+      
+      // Try multiple strategies to make button visible
+      let buttonVisible = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (!buttonVisible && attempts < maxAttempts) {
+        attempts++;
+        logger.info({ chave: this.maskChave(chaveAcesso), attempt: attempts }, `Checking button visibility`);
+        
+        // Check if button is visible
+        const isVisible = await this.page.isVisible('#downloadXmlBtn');
+        
+        if (isVisible) {
+          buttonVisible = true;
+          break;
+        }
+        
+        // Strategies to make button appear
+        if (attempts <= 3) {
+          // Strategy 1: Scroll to button
+          await this.page.locator('#downloadXmlBtn').scrollIntoViewIfNeeded();
+          await this.page.waitForTimeout(2000);
+        } else if (attempts <= 6) {
+          // Strategy 2: Click somewhere else to trigger events
+          await this.page.click('body');
+          await this.page.waitForTimeout(2000);
+        } else {
+          // Strategy 3: Longer wait
+          await this.page.waitForTimeout(5000);
+        }
+      }
+      
+      if (!buttonVisible) {
+        // Try to get more info about what went wrong
+        const buttonExists = await this.page.locator('#downloadXmlBtn').count() > 0;
+        const buttonClass = await this.page.getAttribute('#downloadXmlBtn', 'class');
+        const pageTitle = await this.page.title();
+        
+        logger.error({ 
+          chave: this.maskChave(chaveAcesso), 
+          buttonExists, 
+          buttonClass, 
+          pageTitle 
+        }, 'Download button never became visible');
+        
+        throw new Error(`Download button not visible after ${maxAttempts} attempts. Button exists: ${buttonExists}, Class: ${buttonClass}`);
+      }
 
-      logger.info({ chave: this.maskChave(chaveAcesso) }, 'Results found');
+      logger.info({ chave: this.maskChave(chaveAcesso) }, 'Download button is now visible');
 
-      // Wait to ensure page is fully loaded
-      await this.page.waitForTimeout(3000);
+      // Wait a bit more to ensure stability
+      await this.page.waitForTimeout(2000);
 
       // Click download XML button
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Clicking download XML button');
