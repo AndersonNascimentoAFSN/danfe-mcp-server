@@ -2,13 +2,22 @@
 # Dockerfile Otimizado para Render
 # DANFE Downloader MCP Server
 # ============================================
+# 
+# Configuração completa para:
+# - Node.js 20 LTS
+# - Playwright com Chromium
+# - xvfb (display virtual para modo headless)
+# - MCP Server com Fastify
+#
+# Plataforma: linux/amd64 (requisito Render)
+# ============================================
 
 FROM --platform=linux/amd64 node:20-bullseye
 
 # Metadados
 LABEL maintainer="Anderson Nascimento"
 LABEL description="MCP DANFE Downloader Server para Render"
-LABEL version="2.0.0"
+LABEL version="1.0.0"
 
 # ============================================
 # Instalar dependências do sistema
@@ -47,35 +56,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# Criar diretório da aplicação
-# ============================================
-
-WORKDIR /app
-
-# ============================================
-# Instalar dependências Node.js
-# ============================================
-
-# Copiar apenas package files primeiro (melhor cache)
-COPY package*.json ./
-
-# Instalar TODAS as dependências (incluindo devDependencies para build)
-RUN npm ci
-
-# Instalar Playwright Chromium (ANTES de criar usuário não-root)
-RUN npx playwright install chromium --with-deps
-
-# Verificar instalação do Chromium
-RUN ls -la /ms-playwright/ && \
-    find /ms-playwright -name "chrome" -type f && \
-    echo "✅ Chromium instalado com sucesso"
-
-# ============================================
 # Configuração de usuário (segurança)
 # ============================================
 
-# Criar usuário não-root para executar a aplicação
-RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
+# Usuário já criado acima, apenas ajustar permissões
+RUN chown -R nodejs:nodejs /app
+USER nodejs
 
 # ============================================
 # Copiar código fonte e build
@@ -95,13 +81,6 @@ RUN npm prune --production
 # Criar diretório de downloads
 RUN mkdir -p downloads
 
-# Ajustar permissões
-RUN chown -R nodejs:nodejs /app && \
-    chown -R nodejs:nodejs /ms-playwright
-
-# Mudar para usuário não-root
-USER nodejs
-
 # ============================================
 # Configurar variáveis de ambiente
 # ============================================
@@ -112,6 +91,10 @@ ENV DISPLAY=:99
 # Diretório dos browsers do Playwright
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
+# Configurações Playwright para Render
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/ms-playwright/chromium-*/chrome-linux/chrome
+
 # Node.js em modo produção
 ENV NODE_ENV=production
 
@@ -120,13 +103,19 @@ ENV NODE_ENV=production
 # ============================================
 
 # Render define PORT dinamicamente, mas vamos expor as portas mais comuns
+# para garantir que funcione independentemente da configuração
 EXPOSE 3000 10000 8080
+
+# ============================================
+# Script de inicialização já copiado e com permissões
+# ============================================
 
 # ============================================
 # Health Check
 # ============================================
 
 # Health check otimizado para Render (port detection)
+# Render usa port 10000 por padrão, mas pode variar
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-10000}/health || exit 1
 
