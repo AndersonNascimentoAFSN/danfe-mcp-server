@@ -15,7 +15,16 @@
     "resolveJsonModule": true,
     "typeRoots": [
       "./node_modules/@types"
-    ]
+    ],
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["./*"],
+      "@/config": ["./config"],
+      "@/shared/*": ["./shared/*"],
+      "@/infrastructure/*": ["./infrastructure/*"],
+      "@/core/*": ["./core/*"],
+      "@/presentation/*": ["./presentation/*"]
+    }
   },
   "include": [
     "src/**/*"
