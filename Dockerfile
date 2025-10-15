@@ -47,17 +47,20 @@ WORKDIR /app
 # Copiar apenas package files primeiro (cache Docker)
 COPY --chown=danfe:danfe package*.json ./
 
-# Instalar dependências de produção
-RUN npm ci --only=production
-
-# Instalar Playwright Chromium
-RUN npx playwright install chromium --with-deps
+# Instalar TODAS as dependências (incluindo devDependencies para build)
+RUN npm ci
 
 # Copiar código fonte
 COPY --chown=danfe:danfe . .
 
 # Compilar TypeScript
 RUN npm run build
+
+# Instalar Playwright Chromium
+RUN npx playwright install chromium --with-deps
+
+# Remover devDependencies após build para reduzir tamanho da imagem
+RUN npm prune --production
 
 # Criar diretório de downloads com permissões corretas
 RUN mkdir -p downloads && chown -R danfe:danfe downloads
