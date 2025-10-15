@@ -1,53 +1,54 @@
 #!/bin/bash
 
-# Script de inicialização para Render
+# Render.com optimized startup script
 # DANFE Downloader MCP Server
 
 set -e  # Exit on any error
 
 echo "🚀 Starting DANFE Downloader MCP Server on Render..."
 
-# Configurar variáveis de ambiente para Render
+# Environment variables (Render best practices)
 export NODE_ENV=production
 export HOST=0.0.0.0
-export PORT=${PORT:-3000}
+export PORT=${PORT:-10000}  # Render default is 10000
 export DISPLAY=:99
 
-echo "📋 Configuration:"
+# Debug info for Render logs
+echo "📋 Render Configuration:"
 echo "   NODE_ENV: $NODE_ENV"
-echo "   HOST: $HOST"  
-echo "   PORT: $PORT"
+echo "   HOST: $HOST (bind all interfaces)"  
+echo "   PORT: $PORT (Render managed)"
 echo "   DISPLAY: $DISPLAY"
 
-# Iniciar Xvfb em background
-echo "🖥️  Starting virtual display (Xvfb)..."
-Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
+# Start Xvfb with minimal config for faster startup
+echo "🖥️  Starting Xvfb (virtual display)..."
+Xvfb :99 -screen 0 1024x768x24 -ac -nolisten tcp > /dev/null 2>&1 &
 XVFB_PID=$!
 
-# Aguardar Xvfb iniciar
-sleep 2
-
-# Verificar se Xvfb está rodando
-if ! ps -p $XVFB_PID > /dev/null; then
-    echo "❌ Failed to start Xvfb"
-    exit 1
+# Quick Xvfb validation (non-blocking)
+sleep 1
+if ! ps -p $XVFB_PID > /dev/null 2>&1; then
+    echo "⚠️  Xvfb failed, starting without display..."
+    export DISPLAY=""
+else
+    echo "✅ Xvfb ready (PID: $XVFB_PID)"
 fi
 
-echo "✅ Xvfb started (PID: $XVFB_PID)"
-
-# Função de cleanup
+# Cleanup function
 cleanup() {
-    echo "🛑 Shutting down gracefully..."
-    if ps -p $XVFB_PID > /dev/null; then
-        kill $XVFB_PID
-        echo "✅ Xvfb stopped"
+    echo "🛑 Graceful shutdown..."
+    if [ ! -z "$XVFB_PID" ] && ps -p $XVFB_PID > /dev/null 2>&1; then
+        kill $XVFB_PID 2>/dev/null || true
     fi
     exit 0
 }
 
-# Capturar sinais para cleanup
+# Signal handlers
 trap cleanup SIGTERM SIGINT
 
-# Iniciar o servidor MCP
-echo "🚀 Starting MCP Server..."
+# Start Node.js server immediately (Render port detection)
+echo "🌐 Starting Node.js server on $HOST:$PORT..."
+echo "⏰ $(date): Server starting..."
+
+# Execute Node.js (critical for Render port detection)
 exec node dist/index.js

@@ -154,7 +154,19 @@ app.get("/health", (req: Request, res: Response) => {
     service: "danfe-downloader",
     version: "2.0.0",
     timestamp: new Date().toISOString(),
+    environment: {
+      NODE_ENV: Config.NODE_ENV,
+      HOST: Config.HOST,
+      PORT: Config.PORT,
+      DISPLAY: Config.DISPLAY || 'not-set'
+    },
     browserPool: metrics,
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    render: {
+      detected: !!process.env.RENDER,
+      port: process.env.PORT || 'default'
+    }
   });
 });
 

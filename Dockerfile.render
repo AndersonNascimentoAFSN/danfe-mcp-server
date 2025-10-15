@@ -122,10 +122,10 @@ EXPOSE 3000
 # Health Check
 # ============================================
 
-# Render verifica se a porta está respondendo
-# Adicionamos health check interno também
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3000}/health || exit 1
+# Health check otimizado para Render (port detection)
+# Render usa port 10000 por padrão, mas pode variar
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-10000}/health || exit 1
 
 # ============================================
 # Comando de inicialização
