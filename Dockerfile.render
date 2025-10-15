@@ -62,22 +62,28 @@ COPY package*.json ./
 # Instalar TODAS as dependências (incluindo devDependencies para build)
 RUN npm ci
 
-# Instalar Playwright Chromium (ANTES de criar usuário não-root)
-RUN npx playwright install chromium --with-deps
-
-# Debugar onde o Playwright instalou os browsers
-RUN echo "🔍 Procurando instalação do Playwright..." && \
-    find / -name "*chromium*" -type d 2>/dev/null | head -10 && \
-    find / -name "chrome" -type f 2>/dev/null | head -5 && \
-    ls -la ~/.cache/ms-playwright/ 2>/dev/null || echo "Não encontrado em ~/.cache/ms-playwright" && \
-    echo "✅ Playwright instalado - debugging concluído"
-
 # ============================================
 # Configuração de usuário (segurança)
 # ============================================
 
-# Criar usuário não-root para executar a aplicação
+# Criar usuário não-root ANTES de instalar Playwright
 RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
+
+# Criar diretório home e dar permissões
+RUN mkdir -p /home/nodejs/.cache && \
+    chown -R nodejs:nodejs /home/nodejs
+
+# Instalar Playwright como user nodejs (não como root)
+USER nodejs
+RUN npx playwright install chromium --with-deps
+
+# Verificar se instalou corretamente
+RUN ls -la /home/nodejs/.cache/ms-playwright/ && \
+    find /home/nodejs/.cache/ms-playwright -name "chrome" -type f && \
+    echo "✅ Playwright instalado como user nodejs"
+
+# Voltar para root para continuar build
+USER root
 
 # ============================================
 # Copiar código fonte e build
@@ -97,9 +103,8 @@ RUN npm prune --production
 # Criar diretório de downloads
 RUN mkdir -p downloads
 
-# Ajustar permissões
-RUN chown -R nodejs:nodejs /app && \
-    chown -R nodejs:nodejs ~/.cache/ms-playwright/ 2>/dev/null || echo "Playwright cache não encontrado para chown"
+# Ajustar permissões finais
+RUN chown -R nodejs:nodejs /app
 
 # Mudar para usuário não-root
 USER nodejs
