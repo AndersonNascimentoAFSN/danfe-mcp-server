@@ -134,16 +134,25 @@ export class PlaywrightAdapter {
    * Headed mode is required to bypass Cloudflare protection
    */
   private async initBrowser(): Promise<void> {
-    logger.info('Initializing Chromium browser (headed mode)');
+    // Detect if we're in a headless environment (Render, Docker, etc.)
+    const isHeadlessEnvironment = !process.env.DISPLAY || process.env.NODE_ENV === 'production';
+    const headlessMode = isHeadlessEnvironment;
+    
+    logger.info(`Initializing Chromium browser (${headlessMode ? 'headless' : 'headed'} mode)`);
 
     this.browser = await chromium.launch({
-      headless: false, // Headed mode to avoid Cloudflare detection
+      headless: headlessMode, // Auto-detect based on environment
       slowMo: 100, // Add delay between actions to appear more human
       args: [
         '--no-sandbox',
         '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled', // Hide automation flags
         '--ignore-certificate-errors',
+        // Additional args for headless stability
+        '--disable-gpu',
+        '--disable-extensions',
+        '--no-first-run',
+        '--disable-default-apps',
       ],
     });
 
