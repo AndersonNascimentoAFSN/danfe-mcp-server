@@ -323,7 +323,42 @@ app.delete("/mcp", async (req: Request, res: Response) => {
 // Apply error handler (must be last)
 app.use(errorHandler);
 
-// Start server
+// CRITICAL: Start HTTP server IMMEDIATELY (outside async function)
+// This ensures Render can detect the port as fast as possible
+const server = app.listen(Config.PORT, Config.HOST, () => {
+  logger.info(`✅ Servidor HTTP em http://${Config.HOST}:${Config.PORT}`);
+  logger.info("");
+  logger.info("📚 Endpoints:");
+  logger.info(`   GET  http://${Config.HOST}:${Config.PORT}/health`);
+  logger.info(`   GET  http://${Config.HOST}:${Config.PORT}/mcp/tools`);
+  logger.info(`   POST http://${Config.HOST}:${Config.PORT}/mcp`);
+  logger.info("");
+});
+
+// Graceful shutdown (global scope)
+const shutdown = async (signal: string) => {
+  logger.info(`${signal} received. Starting graceful shutdown...`);
+  
+  try {
+    // Close browser pool
+    const browserPool = getBrowserPool();
+    await browserPool.shutdown();
+    logger.info("✅ Browser pool closed");
+  } catch (error) {
+    logger.warn({ error }, "⚠️  Error closing browser pool");
+  }
+  
+  // Close server
+  server.close(() => {
+    logger.info("✅ HTTP server closed");
+    process.exit(0);
+  });
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// Async initialization (browser pool, etc.)
 async function main() {
   const hasDisplay = !!process.env.DISPLAY;
 
@@ -345,27 +380,16 @@ async function main() {
 
   logger.info("");
 
-  // START HTTP SERVER FIRST (CRITICAL for Render port detection)
-  const server = app.listen(Config.PORT, Config.HOST, () => {
-    logger.info(`✅ Servidor HTTP em http://${Config.HOST}:${Config.PORT}`);
-    logger.info("");
-    logger.info("📚 Endpoints:");
-    logger.info(`   GET  http://${Config.HOST}:${Config.PORT}/health`);
-    logger.info(`   GET  http://${Config.HOST}:${Config.PORT}/mcp/tools`);
-    logger.info(`   POST http://${Config.HOST}:${Config.PORT}/mcp`);
-    logger.info("");
-    
-    // Initialize browser pool AFTER server is running
-    logger.info("🎭 Inicializando browser pool...");
-    getBrowserPool().initialize()
-      .then(() => {
-        logger.info("✅ Browser pool inicializado");
-      })
-      .catch((error) => {
-        logger.error("❌ Erro ao inicializar browser pool:", error);
-        logger.warn("⚠️  Continuando sem browser pool (health check ainda funciona)");
-      });
-  });
+  // Initialize browser pool
+  logger.info("🎭 Inicializando browser pool...");
+  try {
+    const browserPool = getBrowserPool();
+    await browserPool.initialize();
+    logger.info("✅ Browser pool inicializado");
+  } catch (error) {
+    logger.error({ error }, "❌ Erro ao inicializar browser pool");
+    logger.warn("⚠️  Continuando sem browser pool (health check ainda funciona)");
+  }
 
   // Log configuration after server starts
   server.on('listening', () => {
@@ -387,30 +411,10 @@ async function main() {
     logger.info("");
   });
 
-  // Graceful shutdown
-  const shutdown = async (signal: string) => {
-    logger.info(`${signal} received. Starting graceful shutdown...`);
-    
-    try {
-      // Close browser pool
-      const browserPool = getBrowserPool();
-      await browserPool.shutdown();
-      logger.info("✅ Browser pool closed");
-    } catch (error) {
-      logger.warn({ error }, "⚠️  Error closing browser pool");
-    }
-    
-    // Close server
-    server.close(() => {
-      logger.info("✅ HTTP server closed");
-      process.exit(0);
-    });
-  };
-
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  logger.info("✅ Inicialização completa");
 }
 
+// Start async initialization AFTER server is created
 main().catch((error) => {
   logger.error({ error }, 'Erro fatal ao iniciar servidor');
   process.exit(1);

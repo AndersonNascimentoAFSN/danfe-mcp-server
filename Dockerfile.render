@@ -110,9 +110,9 @@ ENV NODE_ENV=production
 # Expor porta
 # ============================================
 
-# Render define PORT via variável de ambiente (geralmente 10000)
-# Mas configuramos para usar 3000 por padrão
-EXPOSE 3000
+# Render define PORT dinamicamente, mas vamos expor as portas mais comuns
+# para garantir que funcione independentemente da configuração
+EXPOSE 3000 10000 8080
 
 # ============================================
 # Script de inicialização já copiado e com permissões
