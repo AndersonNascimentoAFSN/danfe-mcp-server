@@ -54,6 +54,42 @@ export class PlaywrightAdapter {
       const searchButtonSelector = '#searchBtn';
       await this.page.click(searchButtonSelector);
 
+      // Wait for search response first
+      logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for search response');
+      await this.page.waitForTimeout(3000);
+
+      // Check for error messages first
+      const errorMessages = [
+        'Chave de acesso não encontrada!',
+        'Chave de acesso inválida',
+        'NFe não encontrada',
+        'Documento não encontrado'
+      ];
+
+      for (const errorMessage of errorMessages) {
+        const errorElement = await this.page.locator(`text=${errorMessage}`).first();
+        if (await errorElement.isVisible()) {
+          logger.error({ 
+            chave: this.maskChave(chaveAcesso), 
+            errorMessage 
+          }, 'Invalid access key detected');
+          throw new Error(`Invalid access key: ${errorMessage}`);
+        }
+      }
+
+      // Check for general error indicators
+      const hasErrorClass = await this.page.locator('.error, .alert-danger, .text-red-500').first().isVisible();
+      if (hasErrorClass) {
+        const errorText = await this.page.locator('.error, .alert-danger, .text-red-500').first().textContent();
+        logger.error({ 
+          chave: this.maskChave(chaveAcesso), 
+          errorText 
+        }, 'Error message detected on page');
+        throw new Error(`Page error: ${errorText}`);
+      }
+
+      logger.info({ chave: this.maskChave(chaveAcesso) }, 'No error messages found, proceeding with download');
+
       // Prepare download listener
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Preparing download listener');
       const downloadPromise = this.page.waitForEvent('download', {
@@ -63,61 +99,36 @@ export class PlaywrightAdapter {
       // Wait for results with improved logic
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for search results');
       
-      // First wait for element to exist (even if hidden)
-      await this.page.waitForSelector('#downloadXmlBtn', { timeout: 30000 });
+      // Wait for download button to become visible (simplified logic)
+      logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for download button to appear');
       
-      // Try multiple strategies to make button visible
-      let buttonVisible = false;
-      let attempts = 0;
-      const maxAttempts = 10;
-      
-      while (!buttonVisible && attempts < maxAttempts) {
-        attempts++;
-        logger.info({ chave: this.maskChave(chaveAcesso), attempt: attempts }, `Checking button visibility`);
+      try {
+        await this.page.waitForSelector('#downloadXmlBtn', { 
+          state: 'visible',
+          timeout: 30000 
+        });
         
-        // Check if button is visible
-        const isVisible = await this.page.isVisible('#downloadXmlBtn');
+        logger.info({ chave: this.maskChave(chaveAcesso) }, 'Download button is now visible');
         
-        if (isVisible) {
-          buttonVisible = true;
-          break;
-        }
+        // Scroll to button to ensure it's in view
+        await this.page.locator('#downloadXmlBtn').scrollIntoViewIfNeeded();
         
-        // Strategies to make button appear
-        if (attempts <= 3) {
-          // Strategy 1: Scroll to button
-          await this.page.locator('#downloadXmlBtn').scrollIntoViewIfNeeded();
-          await this.page.waitForTimeout(2000);
-        } else if (attempts <= 6) {
-          // Strategy 2: Click somewhere else to trigger events
-          await this.page.click('body');
-          await this.page.waitForTimeout(2000);
-        } else {
-          // Strategy 3: Longer wait
-          await this.page.waitForTimeout(5000);
-        }
-      }
-      
-      if (!buttonVisible) {
-        // Try to get more info about what went wrong
-        const buttonExists = await this.page.locator('#downloadXmlBtn').count() > 0;
-        const buttonClass = await this.page.getAttribute('#downloadXmlBtn', 'class');
-        const pageTitle = await this.page.title();
+        // Wait a bit for any animations
+        await this.page.waitForTimeout(1000);
+        
+      } catch (timeoutError) {
+        // If button doesn't appear, check for any additional error messages
+        const pageContent = await this.page.content();
+        const hasDownloadBtn = pageContent.includes('downloadXmlBtn');
         
         logger.error({ 
-          chave: this.maskChave(chaveAcesso), 
-          buttonExists, 
-          buttonClass, 
-          pageTitle 
-        }, 'Download button never became visible');
+          chave: this.maskChave(chaveAcesso),
+          hasDownloadBtn,
+          pageTitle: await this.page.title()
+        }, 'Download button timeout - may indicate invalid key or site changes');
         
-        throw new Error(`Download button not visible after ${maxAttempts} attempts. Button exists: ${buttonExists}, Class: ${buttonClass}`);
+        throw new Error('Download button not visible - this usually indicates an invalid access key or the key was not found in the system');
       }
-
-      logger.info({ chave: this.maskChave(chaveAcesso) }, 'Download button is now visible');
-
-      // Wait a bit more to ensure stability
-      await this.page.waitForTimeout(2000);
 
       // Click download XML button
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Clicking download XML button');
