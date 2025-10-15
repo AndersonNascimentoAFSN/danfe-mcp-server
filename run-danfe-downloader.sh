@@ -5,11 +5,12 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║        🚀 DANFE Downloader MCP Server (xvfb)              ║"
+echo "║   🚀 DANFE Downloader MCP Server (HTTP Streamable)        ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 echo "📁 Diretório: $PROJECT_DIR"
 echo "🖥️  Modo: Headless (display virtual via xvfb)"
+echo "🌐 Protocolo: HTTP Streamable"
 echo "📦 Build: dist/index.js"
 echo ""
 
