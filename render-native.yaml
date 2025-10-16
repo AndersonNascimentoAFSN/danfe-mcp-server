@@ -1,0 +1,61 @@
+# Render Blueprint - DANFE Downloader MCP Server (Native Node.js)
+# Deploy nativo sem Docker - mais rápido e simples
+
+services:
+  # ============================================
+  # Web Service - MCP Server nativo Node.js
+  # ============================================
+  - type: web
+    name: danfe-downloader-mcp-native
+    runtime: node
+    plan: free  # Ou 'starter' para mais recursos
+    
+    # Região
+    region: ohio
+    
+    # Branch do Git para auto-deploy
+    branch: main
+    
+    # Build e start commands
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:headless
+    
+    # Health check endpoint
+    healthCheckPath: /health
+    
+    # Node.js version
+    nodeVersion: 20
+    
+    # Variáveis de ambiente
+    envVars:
+      # Host (deve ser 0.0.0.0 para aceitar conexões externas)
+      - key: HOST
+        value: 0.0.0.0
+      
+      # Node.js em produção
+      - key: NODE_ENV
+        value: production
+      
+      # Display virtual para Playwright (xvfb)
+      - key: DISPLAY
+        value: :99
+      
+      # Log level
+      - key: LOG_LEVEL
+        value: info
+      
+      # Playwright config
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/.cache/ms-playwright
+        
+      # Memory limit para Playwright
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=1024
+
+    # Custom apt packages para Playwright
+    buildFilter:
+      paths:
+        - package.json
+        - package-lock.json
+        - src/**
+        - tsconfig.json
