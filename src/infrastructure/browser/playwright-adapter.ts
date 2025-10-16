@@ -127,46 +127,150 @@ export class PlaywrightAdapter {
       // Wait for results with improved logic
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for search results');
       
-      // Wait for download button to become visible (simplified logic)
+      // Wait for download button to become visible with enhanced logic for Render.com
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for download button to appear');
       
-      try {
-        await this.page.waitForSelector('#downloadXmlBtn', { 
-          state: 'visible',
-          timeout: 30000 
-        });
-        
-        logger.info({ chave: this.maskChave(chaveAcesso) }, 'Download button is now visible');
-        
-        // Scroll to button to ensure it's in view
-        await this.page.locator('#downloadXmlBtn').scrollIntoViewIfNeeded();
-        
-        // Wait a bit for any animations
-        await this.page.waitForTimeout(1000);
-        
-      } catch (timeoutError) {
-        // If button doesn't appear, check for any additional error messages
+      // Enhanced button detection with multiple strategies
+      let buttonFound = false;
+      const maxAttempts = 12; // 60 seconds total (5s per attempt)
+      
+      for (let attempt = 1; attempt <= maxAttempts && !buttonFound; attempt++) {
+        try {
+          logger.debug({ 
+            chave: this.maskChave(chaveAcesso), 
+            attempt, 
+            maxAttempts 
+          }, `Checking for download button (attempt ${attempt}/${maxAttempts})`);
+          
+          // Check if button exists in DOM
+          const buttonExists = await this.page.locator('#downloadXmlBtn').count() > 0;
+          
+          if (buttonExists) {
+            // Check if button is visible and enabled
+            const isVisible = await this.page.locator('#downloadXmlBtn').isVisible();
+            const isEnabled = await this.page.locator('#downloadXmlBtn').isEnabled();
+            
+            logger.debug({ 
+              chave: this.maskChave(chaveAcesso), 
+              buttonExists, 
+              isVisible, 
+              isEnabled 
+            }, 'Button state check');
+            
+            if (isVisible && isEnabled) {
+              buttonFound = true;
+              logger.info({ chave: this.maskChave(chaveAcesso) }, 'Download button is now visible and enabled');
+              break;
+            } else if (isVisible && !isEnabled) {
+              // Button is visible but disabled, wait a bit more
+              logger.debug({ chave: this.maskChave(chaveAcesso) }, 'Button visible but disabled, waiting...');
+            }
+          } else {
+            // Button doesn't exist yet, check for loading indicators
+            const hasLoading = await this.page.locator('.loading, .spinner, [class*="loading"]').count() > 0;
+            logger.debug({ 
+              chave: this.maskChave(chaveAcesso), 
+              hasLoading 
+            }, 'Button not found, checking loading state');
+          }
+          
+          // Wait before next attempt
+          await this.page.waitForTimeout(5000);
+          
+        } catch (checkError: any) {
+          logger.debug({ 
+            chave: this.maskChave(chaveAcesso), 
+            attempt, 
+            error: checkError.message 
+          }, 'Error during button check attempt');
+          
+          await this.page.waitForTimeout(5000);
+        }
+      }
+      
+      if (!buttonFound) {
+        // Final diagnostic before throwing error
         const pageContent = await this.page.content();
         const hasDownloadBtn = pageContent.includes('downloadXmlBtn');
+        const pageTitle = await this.page.title();
+        const url = this.page.url();
         
         logger.error({ 
           chave: this.maskChave(chaveAcesso),
           hasDownloadBtn,
-          pageTitle: await this.page.title()
-        }, 'Download button timeout - may indicate invalid key or site changes');
+          pageTitle,
+          url,
+          totalAttempts: maxAttempts
+        }, 'Download button timeout after enhanced detection - may indicate invalid key or site changes');
         
-        throw new Error('Download button not visible - this usually indicates an invalid access key or the key was not found in the system');
+        throw new Error('Download button not visible after 60 seconds - this usually indicates an invalid access key or the key was not found in the system');
       }
+      
+      // Scroll to button to ensure it's in view
+      await this.page.locator('#downloadXmlBtn').scrollIntoViewIfNeeded();
+      
+      // Wait for any animations to complete
+      await this.page.waitForTimeout(2000);
 
       // Prepare download listener AFTER button is confirmed visible
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Preparing download listener');
       const downloadPromise = this.page.waitForEvent('download', {
-        timeout: 120000,
+        timeout: 180000, // Increased to 3 minutes for Render.com environment
       });
 
-      // Click download XML button
+      // Click download XML button with retry logic
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Clicking download XML button');
-      await this.page.click('#downloadXmlBtn');
+      
+      let clickSuccess = false;
+      const maxClickAttempts = 3;
+      
+      for (let clickAttempt = 1; clickAttempt <= maxClickAttempts && !clickSuccess; clickAttempt++) {
+        try {
+          logger.debug({ 
+            chave: this.maskChave(chaveAcesso), 
+            clickAttempt, 
+            maxClickAttempts 
+          }, `Attempting to click download button (attempt ${clickAttempt}/${maxClickAttempts})`);
+          
+          // Ensure button is still visible and enabled before clicking
+          const isStillVisible = await this.page.locator('#downloadXmlBtn').isVisible();
+          const isStillEnabled = await this.page.locator('#downloadXmlBtn').isEnabled();
+          
+          if (!isStillVisible || !isStillEnabled) {
+            logger.warn({ 
+              chave: this.maskChave(chaveAcesso), 
+              isStillVisible, 
+              isStillEnabled 
+            }, 'Button state changed, waiting before retry');
+            await this.page.waitForTimeout(2000);
+            continue;
+          }
+          
+          // Try click with force option for better reliability
+          await this.page.locator('#downloadXmlBtn').click({ force: true });
+          clickSuccess = true;
+          
+          logger.info({ 
+            chave: this.maskChave(chaveAcesso), 
+            clickAttempt 
+          }, 'Download button clicked successfully');
+          
+        } catch (clickError: any) {
+          logger.warn({ 
+            chave: this.maskChave(chaveAcesso), 
+            clickAttempt, 
+            error: clickError.message 
+          }, 'Click attempt failed, will retry if attempts remain');
+          
+          if (clickAttempt < maxClickAttempts) {
+            await this.page.waitForTimeout(3000); // Wait before retry
+          }
+        }
+      }
+      
+      if (!clickSuccess) {
+        throw new Error('Failed to click download button after multiple attempts');
+      }
 
       // Wait for download
       logger.info({ chave: this.maskChave(chaveAcesso) }, 'Waiting for download to start');

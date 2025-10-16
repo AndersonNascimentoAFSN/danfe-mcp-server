@@ -35,6 +35,7 @@ import {
 import { getBrowserPool } from "./infrastructure/browser/browser-pool.js";
 import { PlaywrightAdapter } from "./infrastructure/browser/playwright-adapter.js";
 import { DanfeXmlReader } from "./infrastructure/xml/danfe-xml-reader.js";
+import { DanfeUtils } from "./infrastructure/xml/danfe-utils.js";
 import { errorHandler } from "./presentation/http/middleware/error-handler.js";
 import { rateLimitMiddleware } from "./presentation/http/middleware/rate-limit.js";
 
@@ -84,6 +85,22 @@ mcpServer.tool(
 
       reqLogger.info('XML lido com sucesso');
 
+      // Interpretar códigos usando DanfeUtils
+      const tipoOperacao = DanfeUtils.getTipoOperacao(xmlData.nfe.tipoNF);
+      const ambiente = DanfeUtils.getAmbiente(xmlData.nfe.ambiente);
+      const finalidade = DanfeUtils.getFinalidade(xmlData.nfe.finalidade);
+      
+      // Interpretar transporte se disponível
+      const modalidadeFrete = xmlData.transporte?.modalidadeFrete 
+        ? DanfeUtils.getModalidadeFrete(xmlData.transporte.modalidadeFrete)
+        : null;
+      
+      // Interpretar formas de pagamento se disponíveis
+      const formasPagamentoInterpretadas = xmlData.pagamento?.map(pag => ({
+        ...pag,
+        interpretacao: DanfeUtils.getFormaPagamento(pag.forma)
+      })) || [];
+
       const result = {
         success: true,
         filePath,
@@ -91,7 +108,39 @@ mcpServer.tool(
         chaveAcesso,
         requestId,
         timestamp: new Date().toISOString(),
+        
+        // Dados brutos estruturados
         data: xmlData,
+        
+        // Interpretações para fácil uso
+        interpretacoes: {
+          tipoOperacao: {
+            ...tipoOperacao,
+            isEntrada: DanfeUtils.isEntrada(xmlData.nfe.tipoNF),
+            isSaida: DanfeUtils.isSaida(xmlData.nfe.tipoNF)
+          },
+          ambiente,
+          finalidade,
+          modalidadeFrete,
+          formasPagamento: formasPagamentoInterpretadas
+        },
+        
+        // Resumo executivo para dashboard
+        resumo: {
+          chave: xmlData.nfe.chaveAcesso,
+          numero: xmlData.nfe.numero,
+          serie: xmlData.nfe.serie,
+          tipoMovimento: tipoOperacao.tipoMovimento,
+          emitente: xmlData.emitente.razaoSocial,
+          destinatario: xmlData.destinatario.nome,
+          valorTotal: xmlData.totais.valorNota,
+          dataEmissao: xmlData.nfe.dataEmissao,
+          situacao: xmlData.protocolo?.motivo || 'N/A',
+          quantidadeProdutos: xmlData.produtos.length,
+          temEntrega: !!xmlData.entrega,
+          temCobranca: !!xmlData.cobranca,
+          transportadora: xmlData.transporte?.transportadora?.nome || null
+        }
       };
 
       // Cleanup
